@@ -15,10 +15,10 @@
 
 #define EspSerial Serial1     //***** emulate Hardware serial
 
-byte mac[] = { 0x74, 0x69, 0x69, 0x2D, 0x30, 0x31 };             //***** Arduino assigned mac address  (arduino example)
-char server[] = "example.com";                                   //***** web application server        (customizable)
-char ssid[] = "wifi_name";                                       //***** your network SSID (name)      (customizable)
-char pass[] = "wifi_password";                                   //***** your network password         (customizable)
+byte mac[] = { 0x74, 0x69, 0x69, 0x2D, 0x30, 0x31 };             //***** Arduino assigned mac address  (customizable)
+char server[] = "example.com";                                  //***** web application server        (customizable)
+char ssid[] = "wifi_key";                                        //***** your network SSID (name)      (customizable)
+char pass[] = "wifi_pass";                                       //***** your network password         (customizable)
 int status = WL_IDLE_STATUS;                                     //***** the Wifi radio's status
 char txtopen[] = "measures.txt";                                 //***** file created in SD card, when no intenret connection and measures should be saved    (customizable)
 byte eth = 10;
@@ -43,7 +43,7 @@ const int redLEDPin = 46;                                        // LED connecte
 const int greenLEDPin = 45;                                      // LED connected to digital pin 45 (PWM)
 const int blueLEDPin = 44;                                       // LED connected to digital pin 44 (PWM)
 
-IPAddress ip(192, 168, 10, 10);                                  //***** set the Arduino static IP address to use if the DHCP fails to assign     (customizable)
+IPAddress ip(192, 168, 0, 177);                                  //***** set the Arduino static IP address to use if the DHCP fails to assign     (customizable)
 SdFat SD;                                                        //***** SD object instantiation
 File myFile;                                                     //***** SD File object instantiation
 EthernetClient ethClient;                                        //***** Ethernet object instantiation
@@ -60,6 +60,11 @@ void setup() {
   pinMode(blueLEDPin, OUTPUT);                                  // pin for RGB LED
   Serial.begin(115200);                                         
   Serial1.begin(115200);                                        
+  pinMode(38, OUTPUT);                                          // pin selected for current consumption
+  pinMode(39, OUTPUT);                                          // pin selected for current consumption
+  pinMode(40, OUTPUT);                                          // pin selected for current consumption
+  pinMode(41, OUTPUT);                                          // pin selected for current consumption
+  giveCurrent(true);                                            // apply digital pins to give current (HIGH) in order to activate the sensors/modules
   Wire.begin();
 }
 
@@ -69,12 +74,12 @@ void loop() {
   switch (state) {
     
     case 0:                                                         // starting point after uploading sketch for first time or after sleep interrupt
-
+    
       Serial.println(F("starting proccess"));
       Serial.println();
       giveLight(0);                                                 // changing the color of LED depending on current state
       
-      for (int i = 1; i <= 60; i++) {                                //  i <= 60   //1 minute given to Arduino in order to initalise (recommended 1min for dust module to warm up)
+      for (int i = 1; i <= 60; i++) {                                //  i <= 60   //1 minute given to Arduino in order to initalise (need 1min for dust module to warm up)
         delay(1000);
         Serial.print(i);
         Serial.println(F(" s (wait 1 minute for Arduino to initialize)"));
@@ -524,11 +529,13 @@ void loop() {
     
     case 12:                                                        // arrange interrupt on Arduino, going to sleep, waking up and initialize default values on variables                                          
       
-      giveLight(12);
+      giveLight(12);          
       delay(3000);
       giveLight(13);
 
       attachInterrupt(0, wakeUp, LOW);                        // Allow wake up pin to trigger interrupt on low
+
+      giveCurrent(false);                                     // apply pins to stop giving current (LOW) in order to reduce consumption
        
       LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);    // Enter power down state with ADC and BOD module disabled, wake up when wake up pin is low
       
@@ -605,20 +612,37 @@ void giveLight(byte currentState) {                                             
   }
 }
 
+void giveCurrent(bool answer) {                                                 // function that controls current flow to modules/sensors
+
+  if(answer){
+    digitalWrite(38, HIGH);
+    digitalWrite(39, HIGH);
+    digitalWrite(40, HIGH);
+    digitalWrite(41, HIGH);
+  } else {
+    digitalWrite(38, LOW);
+    digitalWrite(39, LOW);
+    digitalWrite(40, LOW);
+    digitalWrite(41, LOW);
+   
+  }
+  
+}
+
 void arrangeToSleep(){                                                          // function that enables sleep arrangement
   RTC.setAlarm(ALM1_MATCH_DATE, 0, 0, 0, 1);                        
   RTC.alarm(ALARM_1);
   RTC.alarmInterrupt(ALARM_1, false);                                          // disables alarm 1
   RTC.squareWave(SQWAVE_NONE);                                                 // disables the square wave output
-  // set Alarm 1 to occur at 5 seconds after every minute
+  //set Alarm 1 to occur at 5 seconds after every minute
   // RTC.setAlarm(ALM1_MATCH_SECONDS, 5, 0, 0, 0);
   RTC.setAlarm(ALM1_MATCH_MINUTES, 5, changeSleepTime, 0, 0);                  // set alarm 1 to occur at 5 seconds after every half an hour, starting from next o'clock hour
   changeSleepTime = (changeSleepTime == 0) ? 30 : 0 ;                          // variable that holds sleep arrangement for next time
   RTC.alarmInterrupt(ALARM_1, true);                                           // enable interrupt output for alarm 1
 }
-
-
-void wakeUp(){}                                                                 // just a handler for the pin interrupt (needed for sleep interrupt)
+void wakeUp(){                                                                  // just a handler for the pin interrupt (needed for sleep interrupt)
+  giveCurrent(true);                                           // apply digital pins to give current (HIGH) in order to activate the sensors/modules
+}                                                                 
 
 
 
@@ -718,7 +742,7 @@ void sendHttpRequest(char measures[110], byte moduleOrder) {                    
   wdt_enable(WDTO_8S);
 
   if(moduleOrder == 1){                                 //check which module makes the request (Ethernet or Wifi)
-    ethClient.print("POST /example/input");
+    ethClient.print("POST /example/measure");
     ethClient.println(" HTTP/1.1");
     ethClient.println("Host: example.com");
     ethClient.println("Connection: close");
@@ -729,7 +753,7 @@ void sendHttpRequest(char measures[110], byte moduleOrder) {                    
     ethClient.println(measures);
 
   } else {
-    wifiClient.print("POST /example/input");
+    wifiClient.print("POST /example/measure");
     wifiClient.println(" HTTP/1.1");
     wifiClient.println("Host: example.com");
     wifiClient.println("Connection: close");
@@ -799,12 +823,12 @@ void takeMeasures(bool takeTime) {                                              
   Serial.println(uv);
 
   //Rain
-  rain = readRainSensor();      //   -    0 => It's raining     1 => It's drizzling        2 => Not raining
+  rain = readRainSensor();      //   -    0 => It's raining     1 => It's drizzling        3 => Not raining
   Serial.print(F("rain "));
   Serial.println(rain);
 
   //Dust
-  dust = readDustSensor();      //   -    float number (particles / 0.01 cubic feet)
+  dust = readDustSensor();      //   -    float number (particales / 0.01 cubic feet)
   Serial.print(F("dust concentration = "));
   Serial.print(dust);
   Serial.print(F(" pcs/0.01cf  -  "));
@@ -817,6 +841,7 @@ void takeMeasures(bool takeTime) {                                              
   //Temperature Hummidity Pressure (BME sensor)
   BME280I2C bme;
   bme.begin();
+  delay(1500);
   bme.read(pres, temp, hum);      //   -   float temperature(°C), humidity(%), pressure(Pa)
   Serial.print(F("temp "));
   Serial.println(temp);  
