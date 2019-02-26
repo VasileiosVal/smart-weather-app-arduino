@@ -831,14 +831,9 @@ void takeMeasures(bool takeTime) {                                              
 
   //Dust
   dust = readDustSensor();      //   -    float number (particales / 0.01 cubic feet)
-  Serial.print(F("dust concentration = "));
+  Serial.print(F("dust concentration "));
   Serial.print(dust);
-  Serial.print(F(" pcs/0.01cf  -  "));
-  if (dust < 1.0) Serial.println(F("It's a smokeless and dustless environment")); 
-  if (dust > 1.0 && dust < 20000) Serial.println(F("It's probably only you blowing air to the sensor :)"));
-  if (dust > 20000 && dust < 315000) Serial.println(F("Smokes from matches detected!"));
-  if (dust > 315000) Serial.println(F("Smokes from cigarettes detected! Or It might be a huge fire! Beware!"));
-  
+  Serial.println(F(" pcs/0.01cf"));
 
   //Temperature Hummidity Pressure (BME sensor)
   BME280I2C bme;
@@ -901,6 +896,7 @@ byte readUVSensor() {                                                           
   byte UVIndex;
   int sensorValue = 0;
 
+  delay(500);
   sensorValue = analogRead(0);                                        //connect UV sensor to Analog 0
   int voltage = (sensorValue * (5.0 / 1023.0)) * 1000;                //Voltage in miliVolts
 
@@ -958,7 +954,8 @@ byte readRainSensor() {                                                         
   byte range;
   byte sensorMin = 0;           // Rain sensor minimum
   int sensorMax = 1024;         // Rain sensor maximum
-  
+
+  delay(500);
   sensorReading = analogRead(A1);
   range = map(sensorReading, sensorMin, sensorMax, 0, 3);
   return range;
@@ -979,7 +976,7 @@ float readDustSensor() {                                                        
   do {
     duration = pulseIn(7, LOW);
     lowpulseoccupancy = lowpulseoccupancy+duration;
-    
+      // Serial.println(duration);
   } while( (millis()-startTime) <= sampletime_ms );
 
   ratio = lowpulseoccupancy/(sampletime_ms*10.0);                       // Integer percentage 0=>100
